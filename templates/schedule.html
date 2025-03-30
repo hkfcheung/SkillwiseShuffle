@@ -3,10 +3,26 @@
 <head>
     <title>Game Schedule</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .rounds-container { display: flex; flex-wrap: wrap; gap: 20px; }
-        .round { flex: 1; min-width: 300px; margin-bottom: 20px; }
-        .game { 
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0; /* Example background */
+            color: #333;              /* Text color for contrast */
+        }
+
+        .rounds-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .round {
+            flex: 1;
+            min-width: 300px;
+            margin-bottom: 20px;
+        }
+        .game {
             margin-bottom: 10px;
             padding: 15px;
             border: 1px solid #ccc;
@@ -16,22 +32,45 @@
         }
         .game.available { background-color: #ffd7b5; }
         .game.in-progress { background-color: #b5ffb5; }
-        .game.completed { background-color: #d3d3d3; } /* Added for completed games */
-        .game.blocked { background-color: red; } /* Added for blocked games */
+        .game.completed { background-color: #d3d3d3; }
+        .game.blocked { background-color: red; }
+
         .score-input { margin: 5px 0; }
         .score-input input[type="number"] { 
             width: 60px;
             padding: 5px;
             text-align: center;
         }
-        button { margin-right: 10px; padding: 10px; }
-        .score-input input[type="number"] { 
-            width: 60px; 
-            padding: 5px;
-            text-align: center;
-        }
         .score-input input[type="number"]:focus {
             user-select: all;
+        }
+
+        /* Button styling to match index page */
+        button {
+            background-color: #007bff;  /* Adjust to your preferred color */
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 16px;
+            margin: 10px 5px 10px 0;    /* spacing around the button */
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;  /* Darker shade on hover */
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            margin: 5px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            margin-bottom: 5px;
         }
     </style>
 </head>
@@ -116,17 +155,15 @@
         <button type="submit">Save Scores &amp; Send Email</button>
         <!-- Email addresses field (comma-separated) -->
         <label for="email_addresses">Email Addresses (comma-separated):</label>
-        <input type="text"
-               name="email_addresses"
-               id="email_addresses"
-               placeholder="someone@example.com, another@somewhere.com">
+        <input type="text" name="email_addresses" id="email_addresses" placeholder="someone@example.com, another@somewhere.com">
 
 
     </form>
 
-
-
-    <a href="{{ url_for('index') }}"><button type="button">Back to Player Input</button></a>
+    <!-- "Back to Player Input" button -->
+    <a href="{{ url_for('index') }}">
+        <button type="button">Back to Player Input</button>
+    </a>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -200,65 +237,63 @@
                 });
             });
         });
+
+        document.querySelectorAll('.editable-team').forEach(p => {
+            p.addEventListener('dblclick', function () {
+                const span = this.querySelector('.team-name');
+                const currentText = span.textContent;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentText;
+                input.style.width = '100%';
+
+                // Replace span with input
+                this.replaceChild(input, span);
+                input.focus();
+                input.select();
+
+                input.addEventListener('blur', () => finishEdit(this, input));
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        finishEdit(this, input);
+                    }
+                });
+            });
+
+            function finishEdit(container, input) {
+                const updatedText = input.value.trim();
+                const round = container.dataset.round;
+                const game = container.dataset.game;
+                const team = container.dataset.team;
+
+                // ✅ Validation: must not be empty
+                if (!updatedText) {
+                    alert("Team name cannot be empty. Please enter at least one player.");
+                    input.focus();
+                    return;
+                }
+
+                // Optionally: enforce minimum of one player
+                const players = updatedText.split(',').map(p => p.trim()).filter(Boolean);
+                if (players.length === 0) {
+                    alert("Please enter at least one player name.");
+                    input.focus();
+                    return;
+                }
+
+                // Replace input with span
+                const span = document.createElement('span');
+                span.className = 'team-name';
+                span.textContent = updatedText;
+                container.replaceChild(span, input);
+
+                // Update hidden input value
+                const hiddenInput = document.querySelector(`input[name="team_r${round}_g${game}_${team}"]`);
+                if (hiddenInput) {
+                    hiddenInput.value = updatedText;
+                }
+            }
+        });
     </script>
 </body>
-    <script>
-    document.querySelectorAll('.editable-team').forEach(p => {
-        p.addEventListener('dblclick', function () {
-            const span = this.querySelector('.team-name');
-            const currentText = span.textContent;
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentText;
-            input.style.width = '100%';
-
-            // Replace span with input
-            this.replaceChild(input, span);
-            input.focus();
-            input.select();
-
-            input.addEventListener('blur', () => finishEdit(this, input));
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    finishEdit(this, input);
-                }
-            });
-        });
-
-        function finishEdit(container, input) {
-            const updatedText = input.value.trim();
-            const round = container.dataset.round;
-            const game = container.dataset.game;
-            const team = container.dataset.team;
-
-            // ✅ Validation: must not be empty
-            if (!updatedText) {
-                alert("Team name cannot be empty. Please enter at least one player.");
-                input.focus();
-                return;
-            }
-
-            // Optionally: enforce minimum of one player
-            const players = updatedText.split(',').map(p => p.trim()).filter(Boolean);
-            if (players.length === 0) {
-                alert("Please enter at least one player name.");
-                input.focus();
-                return;
-            }
-
-            // Replace input with span
-            const span = document.createElement('span');
-            span.className = 'team-name';
-            span.textContent = updatedText;
-            container.replaceChild(span, input);
-
-            // Update hidden input value
-            const hiddenInput = document.querySelector(`input[name="team_r${round}_g${game}_${team}"]`);
-            if (hiddenInput) {
-                hiddenInput.value = updatedText;
-            }
-        }
-    });
-    </script>
-
 </html>

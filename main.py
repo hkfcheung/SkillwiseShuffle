@@ -8,6 +8,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Required for flashing messages
@@ -16,6 +21,33 @@ players = []
 
 # ---------- Utility Functions ----------
 
+import re
+
+def strip_team_prefix(name: str) -> str:
+    """
+    Removes a 'Team X:' prefix if present (case-insensitive).
+    For example, 'Team 1: b' -> 'b'.
+    """
+    # Regex to match something like "Team " followed by digits, then a colon and optional space
+    return re.sub(r'(?i)^team\s+\d+:\s*', '', name).strip()
+
+dummy_count = 0
+
+def add_dummy_players_to_multiple_of_4(players_list):
+    """
+    Ensures that the total number of players is a multiple of 4
+    by adding dummy players named PLAYERxx.
+    """
+    global dummy_count
+    n = len(players_list)
+    remainder = n % 4
+    if remainder != 0:
+        needed = 4 - remainder  # how many dummy players to add
+        for _ in range(needed):
+            dummy_count += 1
+            dummy_name = f"PLAYER{dummy_count:02d}"
+            # Choose skill=1 or skill=2 as you wish; e.g., let's use skill=1
+            players_list.append((dummy_name, 1))
 
 def round_robin_pairings(names):
     n = len(names)
@@ -150,9 +182,12 @@ def index():
         return redirect(url_for('index'))
     return render_template('index.html', players=players)
 
-
 @app.route('/generate', methods=['POST'])
 def generate():
+
+    # Make sure the total count of players is a multiple of 4
+    add_dummy_players_to_multiple_of_4(players)
+
     games = generate_games()
     score_data = {}  # Empty initially
     return render_template('schedule.html',
@@ -254,7 +289,8 @@ def save_scores():
             team2_score = int(
                 team2_score_str) if team2_score_str.strip() else 0
 
-            for player in team1_members.split(', '):
+            for raw_player in team1_members.split(', '):
+                player = strip_team_prefix(raw_player)
                 if player not in player_scores:
                     player_scores[player] = [0] * max_rounds
                 while len(player_scores[player]) <= round_index:
@@ -262,7 +298,8 @@ def save_scores():
                 player_scores[player][round_index] = team1_score
 
             if team2_members:
-                for player in team2_members.split(', '):
+                for raw_player in team2_members.split(', '):
+                    player = strip_team_prefix(raw_player)
                     if player not in player_scores:
                         player_scores[player] = [0] * max_rounds
                     while len(player_scores[player]) <= round_index:
