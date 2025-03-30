@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Player Input</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .player-form { margin-bottom: 20px; }
+        .player-list { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Player Input</h1>
+    <div class="player-form">
+        <form method="POST">
+            <input type="text" name="name" placeholder="Enter player name" required>
+            <div style="margin: 10px 0;">
+                <label for="skill">Skill Level (1: Beginner, 2: Intermediate):</label>
+                <input type="number" name="skill" min="1" max="2" required>
+            </div>
+            <input type="submit" value="Add Player">
+        </form>
+    </div>
+
+    <div class="player-list">
+        <h2>Current Players</h2>
+        <ul>
+            {% for name, skill in players %}
+                <li>{{ name }} (Skill Level: {{ skill }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    {% if players %}
+        <form action="{{ url_for('generate') }}" method="POST">
+            <button type="submit">Generate Schedule</button>
+        </form>
+        <form action="{{ url_for('clear') }}" method="POST" style="margin-top: 10px;">
+            <button type="submit">Clear Players</button>
+        </form>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <form action="{{ url_for('import_excel') }}" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".xlsx,.xls">
+            <button type="submit">Import Excel</button>
+        </form>
+    </div>
+</body>
+</html>

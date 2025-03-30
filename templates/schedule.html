@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game Schedule</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .rounds-container { display: flex; flex-wrap: wrap; gap: 20px; }
+        .round { flex: 1; min-width: 300px; margin-bottom: 20px; }
+        .game { 
+            margin-bottom: 10px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .game.available { background-color: #ffd7b5; }
+        .game.in-progress { background-color: #b5ffb5; }
+        .game.completed { background-color: #d3d3d3; } /* Added for completed games */
+        .game.blocked { background-color: red; } /* Added for blocked games */
+        .score-input { margin: 5px 0; }
+        .score-input input[type="number"] { 
+            width: 60px;
+            padding: 5px;
+            text-align: center;
+        }
+        button { margin-right: 10px; padding: 10px; }
+        .score-input input[type="number"] { 
+            width: 60px; 
+            padding: 5px;
+            text-align: center;
+        }
+        .score-input input[type="number"]:focus {
+            user-select: all;
+        }
+    </style>
+</head>
+<body>
+    <h1>Game Schedule</h1>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul>
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form id="scoreForm" action="{{ url_for('save_scores') }}" method="POST">
+
+        <!-- Hidden fields as before -->
+        <input type="hidden" name="original_rounds_json" value='{{ rounds | tojson | safe }}'>
+
+        <!-- Chairs field -->
+        <label for="chairs">Chairs:</label>
+        <input type="text" name="chairs" id="chairs" placeholder="Enter host's name/organization" />
+
+        <!-- Example of your scoreboard content -->
+        <div class="rounds-container">
+            {% for round_num, games in rounds.items() %}
+                <div class="round">
+                    <h2>Round {{ round_num }}</h2>
+                    {% for game in games %}
+                        <div class="game" data-round="{{ round_num }}" data-game="{{ loop.index }}"
+                             data-players="{{ ", ".join(game[0]) }}{% if game|length > 1 %},{{ ", ".join(game[1]) }}{% endif %}">
+                            <h3>Game {{ loop.index }}</h3>
+                            {% set outer_loop = loop %}
+                            {% for team in game[::2] %}
+                                <div class="score-input">
+                                    <div>
+                                        <p class="editable-team"
+                                           data-team="t1"
+                                           data-round="{{ round_num }}"
+                                           data-game="{{ outer_loop.index }}">
+                                            <span class="team-name">
+                                                Team 1: {{ ", ".join(game[0]) }}
+                                            </span>
+                                        </p>
+                                        <input type="hidden"
+                                               name="team_r{{ round_num }}_g{{ outer_loop.index }}_t1"
+                                               value="{{ ", ".join(game[0]) }}">
+                                        <input type="number"
+                                               name="score_r{{ round_num }}_g{{ outer_loop.index }}_t1"
+                                               value="{{ score_data.get('score_r' ~ round_num ~ '_g' ~ outer_loop.index ~ '_t1', '') }}"
+                                               placeholder="Enter score" min="0" required>
+                                    </div>
+                                    {% if game|length > 1 %}
+                                    <div>
+                                        <p class="editable-team"
+                                           data-team="t2"
+                                           data-round="{{ round_num }}"
+                                           data-game="{{ outer_loop.index }}">
+                                            <span class="team-name">
+                                                Team 2: {{ ", ".join(game[1]) }}
+                                            </span>
+                                        </p>
+                                        <input type="hidden"
+                                               name="team_r{{ round_num }}_g{{ outer_loop.index }}_t2"
+                                               value="{{ ", ".join(game[1]) }}">
+                                        <input type="number"
+                                               name="score_r{{ round_num }}_g{{ outer_loop.index }}_t2"
+                                               value="{{ score_data.get('score_r' ~ round_num ~ '_g' ~ outer_loop.index ~ '_t2', '') }}"
+                                               placeholder="Enter score" min="0" required>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <!-- Single button that triggers saving and emailing -->
+        <button type="submit">Save Scores &amp; Send Email</button>
+        <!-- Email addresses field (comma-separated) -->
+        <label for="email_addresses">Email Addresses (comma-separated):</label>
+        <input type="text"
+               name="email_addresses"
+               id="email_addresses"
+               placeholder="someone@example.com, another@somewhere.com">
+
+
+    </form>
+
+
+
+    <a href="{{ url_for('index') }}"><button type="button">Back to Player Input</button></a>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const games = document.querySelectorAll('.game');
+            let activeGames = new Set();
+
+            function updateAvailableGames() {
+                const busyPlayers = new Set();
+                activeGames.forEach(gameId => {
+                    const [round, game] = gameId.split('-');
+                    const gameElement = document.querySelector(`.game[data-round="${round}"][data-game="${game}"]`);
+                    const players = gameElement.dataset.players.split(',');
+                    players.forEach(player => busyPlayers.add(player.trim()));
+                });
+
+                games.forEach(game => {
+                    const scoreInputs = game.querySelectorAll('input[type="number"]');
+                    const hasScores = Array.from(scoreInputs).some(input => parseInt(input.value) > 0);
+
+                    if (hasScores) {
+                        game.classList.remove('in-progress', 'available', 'blocked');
+                        game.classList.add('completed');
+                    } else if (!game.classList.contains('in-progress')) {
+                        const players = game.dataset.players.split(',');
+                        const isBlocked = players.some(player => busyPlayers.has(player.trim()));
+                        game.classList.remove('available', 'blocked');
+                        game.classList.add(isBlocked ? 'blocked' : 'available');
+                    }
+                });
+            }
+
+            games.forEach(game => {
+                game.addEventListener('click', function() {
+                    const gameId = `${this.dataset.round}-${this.dataset.game}`;
+
+                    if (this.classList.contains('in-progress')) {
+                        this.classList.remove('in-progress');
+                        activeGames.delete(gameId);
+                    } else if (this.classList.contains('available')) {
+                        this.classList.add('in-progress');
+                        this.classList.remove('available');
+                        activeGames.add(gameId);
+                    }
+
+                    updateAvailableGames();
+                });
+            });
+
+            // Initialize available games
+            updateAvailableGames();
+
+            // Select all text when focusing on score inputs
+            const scoreInputs = document.querySelectorAll('input[type="number"]');
+            scoreInputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.select();
+                });
+                
+                // Add change event listener to update game statuses when scores change
+                input.addEventListener('change', function() {
+                    const game = this.closest('.game');
+                    const gameId = `${game.dataset.round}-${game.dataset.game}`;
+                    
+                    if (parseInt(this.value) > 0) {
+                        game.classList.remove('in-progress', 'available', 'blocked');
+                        game.classList.add('completed');
+                        activeGames.delete(gameId);
+                    }
+                    
+                    updateAvailableGames();
+                });
+            });
+        });
+    </script>
+</body>
+    <script>
+    document.querySelectorAll('.editable-team').forEach(p => {
+        p.addEventListener('dblclick', function () {
+            const span = this.querySelector('.team-name');
+            const currentText = span.textContent;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentText;
+            input.style.width = '100%';
+
+            // Replace span with input
+            this.replaceChild(input, span);
+            input.focus();
+            input.select();
+
+            input.addEventListener('blur', () => finishEdit(this, input));
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    finishEdit(this, input);
+                }
+            });
+        });
+
+        function finishEdit(container, input) {
+            const updatedText = input.value.trim();
+            const round = container.dataset.round;
+            const game = container.dataset.game;
+            const team = container.dataset.team;
+
+            // ✅ Validation: must not be empty
+            if (!updatedText) {
+                alert("Team name cannot be empty. Please enter at least one player.");
+                input.focus();
+                return;
+            }
+
+            // Optionally: enforce minimum of one player
+            const players = updatedText.split(',').map(p => p.trim()).filter(Boolean);
+            if (players.length === 0) {
+                alert("Please enter at least one player name.");
+                input.focus();
+                return;
+            }
+
+            // Replace input with span
+            const span = document.createElement('span');
+            span.className = 'team-name';
+            span.textContent = updatedText;
+            container.replaceChild(span, input);
+
+            // Update hidden input value
+            const hiddenInput = document.querySelector(`input[name="team_r${round}_g${game}_${team}"]`);
+            if (hiddenInput) {
+                hiddenInput.value = updatedText;
+            }
+        }
+    });
+    </script>
+
+</html>
